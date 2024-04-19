@@ -8,6 +8,7 @@ import requests
 import validators
 
 def download_file(url: str, output_dir: str, filename: str):
+    df = pd.read_csv('data/Metadata2006_2016.csv')
     filepath = os.path.join(output_dir, filename)
 
     try:
@@ -18,6 +19,8 @@ def download_file(url: str, output_dir: str, filename: str):
             for chunk in response.iter_content(chunk_size=8192):
                 file.write(chunk)
 
+        df.loc[df['BRnum'] == filename[:-4], 'pdf_downloaded'] = 'yes'
+        
         print(f'{filename} downloaded')
 
     except Exception as e:
@@ -54,7 +57,7 @@ def main():
 
     t1 = time.perf_counter()
 
-    download_batch(df, output_dir)
+    download_batch(df, output_dir, volume)
 
     t2 = time.perf_counter()
     print(t2 - t1)
