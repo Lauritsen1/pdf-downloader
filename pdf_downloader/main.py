@@ -1,33 +1,44 @@
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 import pandas as pd
 import requests
+import validators
 
-
-def download_file(url: str, output_dir: str, filename: str) -> None:
+def download_file(url: str, output_dir: str, filename: str):
     filepath = os.path.join(output_dir, filename)
-    response = requests.get(url, stream=True)
 
-    if response.status_code == 200:
-        with open(filepath, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=1024):
-                if chunk:
-                    f.write(chunk)
+    try:
+        response = requests.get(url, stream=True)
+        response.raise_for_status()
+
+        with open(filepath, 'wb') as file:
+            for chunk in response.iter_content(chunk_size=8192):
+                file.write(chunk)
+
+        print(f'{filename} downloaded')
+
+    except Exception as e:
+        print(f'{filename} failed')
+
 
 
 def download_batch(
     df: pd.DataFrame, output_dir: str, volume: Optional[int] = None
 ) -> None:
-    if volume is not None:
-        df = df.head(volume)
+    
+    volume = volume or len(df)
 
     with ThreadPoolExecutor(max_workers=5) as executor:
-        for _, row in df.iterrows():
-            executor.submit(
-                download_file, row['Pdf_URL'], output_dir, f'{row["BRnum"]}.pdf'
-            )
+        for index, row in df.head(volume).iterrows():
+            if not pd.isnull(row['Pdf_URL']) or validators.url(row['Pdf_URL']):
+                executor.submit(download_file, row['Pdf_URL'], output_dir, row['BRnum'] + '.pdf')
+            elif not pd.isnull(row['Report Html Address']) or validators.url(row['Report Html Address']):
+                executor.submit(download_file, row['Report Html Address'], output_dir, row['BRnum'] + '.pdf')
+            else:
+                continue
 
 
 def main():
@@ -41,7 +52,12 @@ def main():
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    download_batch(df, output_dir, volume)
+    t1 = time.perf_counter()
+
+    download_batch(df, output_dir)
+
+    t2 = time.perf_counter()
+    print(t2 - t1)
 
 
 if __name__ == '__main__':
